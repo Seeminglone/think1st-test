@@ -3,6 +3,7 @@ import axios from "axios";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
+import ErrorIcon from "@mui/icons-material/Error";
 import dayjs from "dayjs";
 import { shouldDisableDate } from "../utils/helpers/calendar";
 import config from "../config";
@@ -29,18 +30,34 @@ const HolidayAwareDateCalendar: React.FC<HolidayAwareDateCalendarProps> = ({
   useEffect(() => {
     const fetchHolidays = async () => {
       try {
-        const response = await axios.get<Holiday[]>(API_URL, {
-          params: {
-            country: "CA",
-            year: 2024,
-            type: "public_holiday",
-          },
-          headers: {
-            "X-Api-Key": API_KEY,
-          },
-        });
+        const [publicResponse, observanceResponse] = await Promise.all([
+          axios.get<Holiday[]>(API_URL, {
+            params: {
+              country: "PL",
+              year: 2024,
+              type: "public_holiday",
+            },
+            headers: {
+              "X-Api-Key": API_KEY,
+            },
+          }),
+          axios.get<Holiday[]>(API_URL, {
+            params: {
+              country: "PL",
+              year: 2024,
+              type: "observance",
+            },
+            headers: {
+              "X-Api-Key": API_KEY,
+            },
+          }),
+        ]);
 
-        setHolidays(response.data);
+        const combinedHolidays = [
+          ...publicResponse.data,
+          ...observanceResponse.data,
+        ];
+        setHolidays(combinedHolidays);
       } catch (error) {
         console.error("Error fetching holidays:", error);
       }
@@ -59,7 +76,23 @@ const HolidayAwareDateCalendar: React.FC<HolidayAwareDateCalendarProps> = ({
     setSelectedTime("");
   };
 
-  const dateSelected = selectedDate !== null;
+  const getObservanceName = (date: dayjs.Dayjs | null) => {
+    if (!date) return null;
+    const formattedDate = date.format("YYYY-MM-DD");
+
+    const holiday = holidays.find(
+      (holiday) =>
+        holiday.date === formattedDate && holiday.type === "OBSERVANCE"
+    );
+    if (holiday) {
+      return holiday.name;
+    } else {
+      return null;
+    }
+  };
+
+  const observanceName = getObservanceName(selectedDate);
+  const isObservanceDay = observanceName !== null;
 
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth < 456);
 
@@ -93,15 +126,23 @@ const HolidayAwareDateCalendar: React.FC<HolidayAwareDateCalendarProps> = ({
         </label>
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <DateCalendar
-            referenceDate={dayjs("2024-05-17")}
+            referenceDate={dayjs("2024-11")}
             views={["day"]}
             className="holiday-aware-calendar"
             shouldDisableDate={(date) => shouldDisableDate(date, holidays)}
             onChange={handleDateChange}
           />
         </LocalizationProvider>
+        {observanceName && (
+          <div
+            className="observance-name"
+            style={{ marginTop: "10px", color: "#000853", fontSize:"14px", display: "flex", alignItems: "center", gap:"6px" }}
+          >
+            <ErrorIcon sx={{color:"#CBB6E5", width:"20px", height:"20px"}}/> It is {observanceName}
+          </div>
+        )}
       </div>
-      {dateSelected && (
+      {selectedDate && !isObservanceDay && (
         <div style={{ display: "flex", flexDirection: "column" }}>
           <label
             htmlFor="time"
